@@ -5,6 +5,7 @@
 ## Version: @project-version@
 ## SavedVariables: GildenPulsDB
 ## X-Curse-Project-ID: 1781299
+## X-Wago-ID: 4N2bdQNL
 
 Core.lua
 UI.lua
