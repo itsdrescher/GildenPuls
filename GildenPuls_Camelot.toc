@@ -1,0 +1,11 @@
+## Interface: 16001
+## Title: |cffffd100GildenPuls|r
+## Notes: Live-Ticker für Gilden-Events (Level-Ups, Tode, Neuzugänge) – gebaut für Streams
+## Author: itsdrescher
+## Version: @project-version@
+## SavedVariables: GildenPulsDB
+## X-Curse-Project-ID: 1781299
+## X-Wago-ID: 4N2bdQNL
+
+Core.lua
+UI.lua

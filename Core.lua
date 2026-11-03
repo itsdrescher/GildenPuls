@@ -122,9 +122,31 @@ end
 ---------------------------------------------------------------------------
 -- Kommunikation mit anderen Addon-Nutzern in der Gilde
 ---------------------------------------------------------------------------
+-- In WoW Forever können Addon-Nachrichten zeitweise gesperrt sein (z. B. im Kampf).
+-- Dann landen sie in einer Warteschlange und werden später nachgeschickt.
+local queue = {}
+
+local function TrySend(msg)
+  if C_ChatInfo.InChatMessagingLockdown and C_ChatInfo.InChatMessagingLockdown() then
+    return false
+  end
+  local ok, res = pcall(C_ChatInfo.SendAddonMessage, PREFIX, msg, "GUILD")
+  if not ok then return false end
+  return res == nil or res == true or res == 0
+end
+
 local function Send(msg)
   if not IsInGuild() then return end
-  C_ChatInfo.SendAddonMessage(PREFIX, msg, "GUILD")
+  if #queue > 0 or not TrySend(msg) then
+    if #queue < 20 then queue[#queue + 1] = msg end
+  end
+end
+
+local function FlushQueue()
+  while #queue > 0 and IsInGuild() do
+    if not TrySend(queue[1]) then return end
+    table.remove(queue, 1)
+  end
 end
 
 local function OnAddonMessage(prefix, msg, _, sender)
@@ -156,6 +178,10 @@ local DAMAGE = {
   SWING_DAMAGE = true, RANGE_DAMAGE = true, SPELL_DAMAGE = true,
   SPELL_PERIODIC_DAMAGE = true, ENVIRONMENTAL_DAMAGE = true,
 }
+
+-- Kampflog gibt es in Classic Era, in WoW Forever evtl. nicht.
+-- Ohne Kampflog wird der Tod trotzdem gemeldet, nur ohne Gegner/Ursache.
+ns.hasCombatLog = type(CombatLogGetCurrentEventInfo) == "function"
 
 local function OnCombatLog()
   local _, sub, _, _, sourceName, _, _, destGUID, _, _, _, p12 = CombatLogGetCurrentEventInfo()
@@ -269,8 +295,14 @@ frame:SetScript("OnEvent", function(self, event, ...)
     self:UnregisterEvent("ADDON_LOADED")
     for _, e in ipairs({
       "PLAYER_LOGIN", "PLAYER_LEVEL_UP", "PLAYER_DEAD", "CHAT_MSG_ADDON",
-      "GUILD_ROSTER_UPDATE", "PLAYER_GUILD_UPDATE", "COMBAT_LOG_EVENT_UNFILTERED",
+      "GUILD_ROSTER_UPDATE", "PLAYER_GUILD_UPDATE",
     }) do self:RegisterEvent(e) end
+    if ns.hasCombatLog then
+      -- pcall: falls das Event in einem Client gesperrt ist, läuft der Rest weiter
+      if not pcall(self.RegisterEvent, self, "COMBAT_LOG_EVENT_UNFILTERED") then
+        ns.hasCombatLog = false
+      end
+    end
 
   elseif event == "PLAYER_LOGIN" then
     ns.myRealm = GetNormalizedRealmName()
@@ -280,11 +312,12 @@ frame:SetScript("OnEvent", function(self, event, ...)
     if ns.InitUI then ns.InitUI() end
     RequestRoster()
     C_Timer.NewTicker(ROSTER_POLL, RequestRoster)
+    C_Timer.NewTicker(2, FlushQueue)
     C_Timer.After(5, function() Send("HELLO;" .. ns.VERSION) end)
     Print(("v%s geladen – |cffffffff/gp|r für Befehle."):format(ns.VERSION))
 
   elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
-    OnCombatLog()
+    if ns.hasCombatLog then pcall(OnCombatLog) end
   elseif event == "PLAYER_LEVEL_UP" then
     OnPlayerLevelUp(...)
   elseif event == "PLAYER_DEAD" then
