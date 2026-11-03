@@ -1,4 +1,4 @@
-## Interface: 11507
+## Interface: 11509
 ## Title: |cffffd100GildenPuls|r
 ## Notes: Live-Ticker für Gilden-Events (Level-Ups, Tode, Neuzugänge) – gebaut für Streams
 ## Author: itsdrescher
