@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1b1e2b"/>
+      <stop offset="1" stop-color="#090a0f"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffe9a3"/>
+      <stop offset="0.45" stop-color="#f2b632"/>
+      <stop offset="1" stop-color="#a8650f"/>
+    </linearGradient>
+    <linearGradient id="shield" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7a1420"/>
+      <stop offset="1" stop-color="#2e060c"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#f2b632" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#f2b632" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="9" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <clipPath id="clip">
+      <path d="M256 96 L380 134 L380 268 C380 346 320 396 256 424 C192 396 132 346 132 268 L132 134 Z"/>
+    </clipPath>
+  </defs>
+
+  <!-- Hintergrund -->
+  <rect width="512" height="512" rx="0" fill="url(#bg)"/>
+  <circle cx="256" cy="262" r="230" fill="url(#halo)"/>
+
+  <!-- Wappen -->
+  <path d="M256 78 L398 122 L398 268 C398 358 330 412 256 444 C182 412 114 358 114 268 L114 122 Z"
+        fill="url(#gold)"/>
+  <path d="M256 96 L380 134 L380 268 C380 346 320 396 256 424 C192 396 132 346 132 268 L132 134 Z"
+        fill="url(#shield)"/>
+  <!-- feine Innenlinie -->
+  <path d="M256 112 L366 146 L366 268 C366 336 312 380 256 406 C200 380 146 336 146 268 L146 146 Z"
+        fill="none" stroke="#f2b632" stroke-opacity="0.35" stroke-width="3"/>
+
+  <!-- Puls-Linie -->
+  <g filter="url(#glow)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="40,272 168,272 194,232 222,316 256,148 290,356 314,248 338,272 472,272"
+              stroke="#0b0c12" stroke-width="34"/>
+    <polyline points="40,272 168,272 194,232 222,316 256,148 290,356 314,248 338,272 472,272"
+              stroke="url(#gold)" stroke-width="20"/>
+    <polyline points="40,272 168,272 194,232 222,316 256,148 290,356 314,248 338,272 472,272"
+              stroke="#fff6d6" stroke-width="5" stroke-opacity="0.8"/>
+  </g>
+
+  <!-- Funke an der Spitze -->
+  <path d="M256 104 L264 140 L300 148 L264 156 L256 192 L248 156 L212 148 L248 140 Z"
+        fill="#fff6d6"/>
+</svg>

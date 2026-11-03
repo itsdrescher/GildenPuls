@@ -1,0 +1,24 @@
+# Baut bei jedem Tag wie "v1.0.0" automatisch eine fertige Zip
+# und legt sie als GitHub-Release an – genau das liest WowUp aus.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+      # CurseForge / Wago: werden nur genutzt, wenn die Secrets im Repo angelegt sind
+      CF_API_KEY: ${{ secrets.CF_API_KEY }}
+      WAGO_API_TOKEN: ${{ secrets.WAGO_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: BigWigsMods/packager@v2

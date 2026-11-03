@@ -1,0 +1,6 @@
+package-as: GildenPuls
+
+ignore:
+  - README.md
+  - .github
+  - media
