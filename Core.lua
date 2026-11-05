@@ -9,7 +9,7 @@ local MAX_EVENTS  = 500            -- so viele Events bleiben im Verlauf gespeic
 local ROSTER_POLL = 20             -- Sekunden zwischen Roster-Abfragen
 ns.MAX_LEVEL      = 60
 
-ns.addonUsers = {}   -- [Name-Realm] = Version
+ns.addonUsers = {}   -- [Schlüssel] = { name = Name-Realm, v = Version }
 ns.reported   = {}   -- [Name-Realm] = höchstes bereits gemeldetes Level
 ns.lastDeath  = {}   -- [Name-Realm] = GetTime() des letzten gemeldeten Todes
 ns.classOf    = {}   -- [Name-Realm] = Klassen-Token (z. B. "WARRIOR")
@@ -59,6 +59,22 @@ local function Normalize(name)
 end
 ns.Normalize = Normalize
 
+-- Vergleichs-Schlüssel: Groß/Klein, Leerzeichen, Bindestriche und Apostrophe im
+-- Realm-Namen werden ignoriert ("Michael-Die Aldor" == "michael-diealdor").
+local function Key(name)
+  name = Normalize(name)
+  if not name then return nil end
+  local short, realm = name:match("^([^-]+)-(.+)$")
+  if not short then short, realm = name, ns.myRealm or "" end
+  realm = realm:gsub("[%s%-']", "")
+  return (short .. "-" .. realm):lower()
+end
+ns.Key = Key
+
+-- Zufällige Kennung dieser Spielsitzung: so erkennt das Addon seine eigenen
+-- Nachrichten sicher wieder, egal wie WoW den Absender schreibt.
+ns.session = ("%06x%04x"):format(math.random(0, 0xFFFFFF), math.floor(GetTime() * 1000) % 0xFFFF)
+
 function ns.Short(name)
   return name and (name:match("^[^-]+") or name) or "?"
 end
@@ -94,26 +110,28 @@ function ns.Fire(ev, silent)
 end
 
 local function ReportLevel(name, level, classFile, zone, source)
-  if not name or not level then return end
-  if level <= (ns.reported[name] or 0) then return end   -- schon gemeldet
-  ns.reported[name] = level
-  if classFile then ns.classOf[name] = classFile end
+  local k = Key(name)
+  if not k or not level then return end
+  if level <= (ns.reported[k] or 0) then return end   -- schon gemeldet
+  ns.reported[k] = level
+  if classFile then ns.classOf[k] = classFile end
   ns.Fire({
     type = "LEVEL", name = name, level = level,
-    class = classFile or ns.classOf[name],
+    class = classFile or ns.classOf[k],
     zone = (zone ~= "" and zone) or nil, source = source,
   })
 end
 
 local function ReportDeath(name, level, classFile, zone, killer)
-  if not name then return end
+  local k = Key(name)
+  if not k then return end
   local now = GetTime()
-  if ns.lastDeath[name] and now - ns.lastDeath[name] < 10 then return end
-  ns.lastDeath[name] = now
-  if classFile then ns.classOf[name] = classFile end
+  if ns.lastDeath[k] and now - ns.lastDeath[k] < 20 then return end   -- doppelte Meldung
+  ns.lastDeath[k] = now
+  if classFile then ns.classOf[k] = classFile end
   ns.Fire({
     type = "DEATH", name = name, level = level,
-    class = classFile or ns.classOf[name],
+    class = classFile or ns.classOf[k],
     zone = (zone ~= "" and zone) or nil,
     killer = (killer ~= "" and killer) or nil,
   })
@@ -152,18 +170,26 @@ end
 local function OnAddonMessage(prefix, msg, _, sender)
   if prefix ~= PREFIX then return end
   sender = Normalize(sender)
-  if not sender or sender == ns.me then return end
+  if not sender then return end
 
-  local cmd, a, b, c, d = strsplit(";", msg)
+  local cmd, a, b, c, d, sid = strsplit(";", msg)
+  if cmd == "HELLO" or cmd == "HI" then sid = b end
+  if cmd == "LVL" then sid = d end
+
+  -- Eigene Nachricht? (kommt bei WoW immer auch an einen selbst zurück)
+  if sid == ns.session or Key(sender) == Key(ns.me) then return end
+  local short = sender:match("^[^-]+")
+  if short == UnitName("player") and not sid then return end   -- ältere Version ohne Kennung
+
   if cmd == "LVL" then
     ReportLevel(sender, tonumber(a), (b ~= "" and b) or nil, c, "addon")
   elseif cmd == "DIE" then
     ReportDeath(sender, tonumber(a), (b ~= "" and b) or nil, c, d)
   elseif cmd == "HELLO" then
-    ns.addonUsers[sender] = a
-    Send("HI;" .. ns.VERSION)
+    ns.addonUsers[Key(sender)] = { name = sender, v = a }
+    Send(("HI;%s;%s"):format(ns.VERSION, ns.session))
   elseif cmd == "HI" then
-    ns.addonUsers[sender] = a
+    ns.addonUsers[Key(sender)] = { name = sender, v = a }
   end
 end
 
@@ -194,7 +220,7 @@ end
 local function OnPlayerLevelUp(level)
   local class, zone = MyClass(), Clean(Zone())
   ReportLevel(ns.me, level, class, zone, "self")
-  Send(("LVL;%d;%s;%s"):format(level, class or "", zone))
+  Send(("LVL;%d;%s;%s;%s"):format(level, class or "", zone, ns.session))
 end
 
 local function OnPlayerDead()
@@ -202,7 +228,7 @@ local function OnPlayerDead()
   if ns.lastHit and GetTime() - ns.lastHit.t < 15 then killer = Clean(ns.lastHit.name) end
   local level, class, zone = UnitLevel("player"), MyClass(), Clean(Zone())
   ReportDeath(ns.me, level, class, zone, killer)
-  Send(("DIE;%d;%s;%s;%s"):format(level, class or "", zone, killer))
+  Send(("DIE;%d;%s;%s;%s;%s"):format(level, class or "", zone, killer, ns.session))
 end
 
 ---------------------------------------------------------------------------
@@ -240,7 +266,7 @@ local function ScanRoster()
     name = Normalize(name)
     if name then
       seen[name] = true
-      if classFile then ns.classOf[name] = classFile end
+      if classFile then ns.classOf[Key(name)] = classFile end
       local old = roster[name]
       if not initial then
         if old == nil then
@@ -251,7 +277,8 @@ local function ScanRoster()
       end
       if level then
         roster[name] = level
-        if (ns.reported[name] or 0) < level then ns.reported[name] = level end
+        local k = Key(name)
+        if (ns.reported[k] or 0) < level then ns.reported[k] = level end
       end
     end
   end
@@ -273,7 +300,7 @@ local function ScanRoster()
     if #missing <= 3 then
       for _, name in ipairs(missing) do
         roster[name] = nil
-        ns.Fire({ type = "LEAVE", name = name, class = ns.classOf[name] }, quiet)
+        ns.Fire({ type = "LEAVE", name = name, class = ns.classOf[Key(name)] }, quiet)
       end
     end
   end
@@ -308,12 +335,12 @@ frame:SetScript("OnEvent", function(self, event, ...)
     ns.myRealm = GetNormalizedRealmName()
     ns.me      = Normalize(UnitName("player"))
     ns.myGUID  = UnitGUID("player")
-    ns.reported[ns.me] = UnitLevel("player")
+    ns.reported[Key(ns.me)] = UnitLevel("player")
     if ns.InitUI then ns.InitUI() end
     RequestRoster()
     C_Timer.NewTicker(ROSTER_POLL, RequestRoster)
     C_Timer.NewTicker(2, FlushQueue)
-    C_Timer.After(5, function() Send("HELLO;" .. ns.VERSION) end)
+    C_Timer.After(5, function() Send(("HELLO;%s;%s"):format(ns.VERSION, ns.session)) end)
     Print(("v%s geladen – |cffffffff/gp|r für Befehle."):format(ns.VERSION))
 
   elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
@@ -403,7 +430,7 @@ SlashCmdList.GILDENPULS = function(input)
     end
   elseif cmd == "wer" or cmd == "who" then
     local names = {}
-    for name, v in pairs(ns.addonUsers) do names[#names + 1] = ns.Short(name) .. " (" .. v .. ")" end
+    for _, u in pairs(ns.addonUsers) do names[#names + 1] = ns.Short(u.name) .. " (" .. tostring(u.v) .. ")" end
     table.sort(names)
     Print(#names == 0 and "Noch niemand sonst online mit GildenPuls."
       or ("%d online mit GildenPuls: %s"):format(#names, table.concat(names, ", ")))
