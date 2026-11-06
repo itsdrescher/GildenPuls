@@ -137,6 +137,17 @@ local function CreatePin(canvas)
   return pin
 end
 
+-- Ebene wie bei Gruppenmitgliedern: liegt über Karte, erkundeten Gebieten und Quest-Symbolen
+local function PinLevel(map, canvas)
+  local base = canvas:GetFrameLevel() + 2000
+  local mgr = map.GetPinFrameLevelsManager and map:GetPinFrameLevelsManager()
+  if mgr and mgr.GetValidFrameLevel then
+    local ok, lvl = pcall(mgr.GetValidFrameLevel, mgr, "PIN_FRAME_LEVEL_GROUP_MEMBER")
+    if ok and type(lvl) == "number" then base = math.max(base, lvl + 5) end
+  end
+  return math.min(base, 9000)
+end
+
 local function Place(pin, canvas, scale, mx, my)
   pin:SetScale(scale)
   pin:ClearAllPoints()
@@ -152,6 +163,7 @@ function ns.RefreshMap()
 
   local canvasScale = (map.GetCanvasScale and map:GetCanvasScale()) or 1
   local scale = 1 / canvasScale
+  local level = PinLevel(map, canvas)
   local now = GetTime()
   used = 0
 
@@ -167,7 +179,8 @@ function ns.RefreshMap()
           local pin = pins[used] or CreatePin(canvas)
           pins[used] = pin
           pin:SetParent(canvas)
-          pin:SetFrameLevel(canvas:GetFrameLevel() + 100)
+          pin:SetFrameStrata(map:GetFrameStrata())
+          pin:SetFrameLevel(level)
           pin.data = d
           local r, g, b = ClassColor(d.class)
           pin.dot:SetVertexColor(r, g, b)
@@ -185,6 +198,29 @@ end
 ---------------------------------------------------------------------------
 -- Test: Beispielpunkte rund um die eigene Position
 ---------------------------------------------------------------------------
+-- /gp karte: zeigt im Chat, wer gerade Positionen sendet
+function ns.MapInfo()
+  local map = WorldMapFrame
+  local shownID = map and map.GetMapID and map:GetMapID()
+  local n = 0
+  for _, d in pairs(ns.positions) do
+    n = n + 1
+    local where
+    if d.hidden then where = d.instance and "im Dungeon/Raid" or "Position gesperrt"
+    else
+      local info = d.map and d.map > 0 and C_Map.GetMapInfo(d.map)
+      where = info and info.name or "?"
+      if shownID then
+        local ok, onMap, pos = pcall(C_Map.GetMapPosFromWorldPos, d.cont, CreateVector2D(d.x, d.y), shownID)
+        local mx, my = ok and pos and pos:GetXY()
+        where = where .. ((mx and mx >= 0 and mx <= 1 and my >= 0 and my <= 1) and " |cff57ab5a(auf offener Karte)|r" or "")
+      end
+    end
+    ns.Print(("%s – %s (vor %d s)"):format(ns.Short(d.name), where, math.max(0, GetTime() - d.t)))
+  end
+  if n == 0 then ns.Print("Noch keine Positionen empfangen. Haben die anderen die neue Version?") end
+end
+
 function ns.MapTest()
   local cont, x, y, mapID = MyWorldPos()
   if not cont then

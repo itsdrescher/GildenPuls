@@ -388,6 +388,7 @@ end
 local HELP = {
   "|cffffffff/gp test|r [level|meilenstein|max|tod|join|leave] – Beispiel-Pop-ups zeigen",
   "|cffffffff/gp test karte|r – Beispiel-Gildenmitglieder auf der Weltkarte",
+  "|cffffffff/gp karte|r – wer gerade seine Position sendet",
   "|cffffffff/gp unlock|r / |cffffffff/gp lock|r – Position verschieben / fixieren",
   "|cffffffff/gp scale 1.2|r – Größe ändern",
   "|cffffffff/gp dauer 7|r – Anzeigedauer in Sekunden",
@@ -414,6 +415,8 @@ SlashCmdList.GILDENPULS = function(input)
         C_Timer.After((i - 1) * 1.5, function() ShowTest(key) end)
       end
     end
+  elseif cmd == "karte" and ns.MapInfo then
+    ns.MapInfo()
   elseif cmd == "unlock" then
     ns.SetLocked(false); Print("Entsperrt – Rahmen mit der Maus verschieben, dann |cffffffff/gp lock|r.")
   elseif cmd == "lock" then
