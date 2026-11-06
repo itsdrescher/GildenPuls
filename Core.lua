@@ -153,6 +153,8 @@ local function TrySend(msg)
   return res == nil or res == true or res == 0
 end
 
+ns.TrySend = function(msg) return IsInGuild() and TrySend(msg) end
+
 local function Send(msg)
   if not IsInGuild() then return end
   if #queue > 0 or not TrySend(msg) then
@@ -172,9 +174,11 @@ local function OnAddonMessage(prefix, msg, _, sender)
   sender = Normalize(sender)
   if not sender then return end
 
-  local cmd, a, b, c, d, sid = strsplit(";", msg)
-  if cmd == "HELLO" or cmd == "HI" then sid = b end
-  if cmd == "LVL" then sid = d end
+  local p = { strsplit(";", msg) }
+  local cmd, a, b, c, d = p[1], p[2], p[3], p[4], p[5]
+  -- Sitzungskennung steht je nach Nachricht an anderer Stelle
+  local SID_POS = { HELLO = 3, HI = 3, LVL = 5, DIE = 6, POS = 9 }
+  local sid = SID_POS[cmd] and p[SID_POS[cmd]] or nil
 
   -- Eigene Nachricht? (kommt bei WoW immer auch an einen selbst zurück)
   if sid == ns.session or Key(sender) == Key(ns.me) then return end
@@ -190,6 +194,8 @@ local function OnAddonMessage(prefix, msg, _, sender)
     Send(("HI;%s;%s"):format(ns.VERSION, ns.session))
   elseif cmd == "HI" then
     ns.addonUsers[Key(sender)] = { name = sender, v = a }
+  elseif cmd == "POS" and ns.OnPosition then
+    ns.OnPosition(sender, p)
   end
 end
 
@@ -337,6 +343,7 @@ frame:SetScript("OnEvent", function(self, event, ...)
     ns.myGUID  = UnitGUID("player")
     ns.reported[Key(ns.me)] = UnitLevel("player")
     if ns.InitUI then ns.InitUI() end
+    if ns.InitMap then ns.InitMap() end
     RequestRoster()
     C_Timer.NewTicker(ROSTER_POLL, RequestRoster)
     C_Timer.NewTicker(2, FlushQueue)
@@ -380,6 +387,7 @@ end
 
 local HELP = {
   "|cffffffff/gp test|r [level|meilenstein|max|tod|join|leave] – Beispiel-Pop-ups zeigen",
+  "|cffffffff/gp test karte|r – Beispiel-Gildenmitglieder auf der Weltkarte",
   "|cffffffff/gp unlock|r / |cffffffff/gp lock|r – Position verschieben / fixieren",
   "|cffffffff/gp scale 1.2|r – Größe ändern",
   "|cffffffff/gp dauer 7|r – Anzeigedauer in Sekunden",
@@ -397,7 +405,9 @@ SlashCmdList.GILDENPULS = function(input)
   local s = ns.db.settings
 
   if cmd == "test" then
-    if TESTS[arg] then
+    if arg == "karte" and ns.MapTest then
+      ns.MapTest()
+    elseif TESTS[arg] then
       ShowTest(arg)
     else
       for i, key in ipairs(TEST_ORDER) do
